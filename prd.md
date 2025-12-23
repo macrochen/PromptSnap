@@ -6,24 +6,24 @@
 | **产品类型** | Chrome 浏览器扩展 (Extension) |
 | **核心交互** | 侧边抽屉 (Sidebar) + 悬浮球 |
 | **当前阶段** | MVP (最小可行性产品) |
-| **目标平台** | **Google Gemini** (主要), 架构预留 ChatGPT 支持 |
-| **核心目标** | 在 Gemini 界面通过侧边栏一键填入预设 Prompt，解决重复输入痛点。 |
+| **目标平台** | **Google Gemini** & **Google AI Studio**, 架构预留其他平台支持 |
+| **核心目标** | 在 Gemini/AI Studio 界面通过侧边栏一键填入预设 Prompt，解决重复输入痛点。 |
 
 ---
 
 ## 1. 产品背景与价值
-**痛点**：用户在与 AI (特别是 Gemini) 交互时，高频使用固定指令（如“请解释代码”、“翻译成英文”、“润色文案”）。手动输入或从记事本复制粘贴效率低下。
+**痛点**：用户在与 AI (特别是 Gemini / AI Studio) 交互时，高频使用固定指令（如“请解释代码”、“翻译成英文”、“润色文案”）。手动输入或从记事本复制粘贴效率低下。
 **价值**：在浏览器当前页面通过侧边栏“即点即用”，极大提升交互效率。
 
 ---
 
 ## 2. 用户流程 (User Flow)
-1.  用户打开 `gemini.google.com`。
+1.  用户打开 `gemini.google.com` 或 `aistudio.google.com`。
 2.  页面显示半透明悬浮球（默认右下侧）。
 3.  点击悬浮球，右侧滑出 PromptSnap 侧边栏。
 4.  侧边栏默认展示 2-3 条预置 Prompt（首次使用）。
 5.  用户点击某条 Prompt。
-6.  **核心动作**：Gemini 输入框自动填入文字，并触发输入事件（确保发送按钮变亮）。
+6.  **核心动作**：当前页面的输入框自动填入文字，并触发输入事件。
 
 ---
 
@@ -32,7 +32,7 @@
 ### 3.1. 唤起与交互 (Toggle & UI)
 *   **悬浮球 (Floating Action Button)**：
     *   **位置**：默认位于页面右侧边缘中部。
-    *   **拖拽**：**支持垂直拖拽**，防止遮挡 Gemini 界面元素。
+    *   **拖拽**：**支持垂直拖拽**，防止遮挡 Gemini/AI Studio 界面元素。
     *   **样式**：轻量级设计，半透明，Hover 时高亮。
 *   **侧边栏 (Sidebar)**：
     *   点击悬浮球 -> 侧边栏从右向左滑出。
@@ -56,11 +56,12 @@
 
 ### 3.3. 核心功能：智能填入 (Smart Snap)
 *   **目标元素定位**：
-    *   针对 Gemini 网页结构，精准定位输入框容器（通常是 `contenteditable` 的 `div` 或 `rich-textarea`）。
-    *   *注：Gemini 的 DOM 结构可能会变，需保持选择器的灵活性。*
+    *   **Gemini**: `div[contenteditable].rich-textarea`
+    *   **AI Studio**: `textarea` 或 `div[contenteditable]`
+    *   *通用兜底*：尝试查找页面中可见的输入区域。
 *   **模拟输入 (Critical)**：
     *   不仅是修改 DOM 的 `innerText`。
-    *   **必须触发 Input 事件**：执行 `input`, `change`, 或 `textInput` 事件分发，确保 Gemini 的前端框架（Angular/Lit/React等）能够感知数据变化，从而激活“发送”按钮。
+    *   **必须触发 Input 事件**：执行 `input`, `change`, 或 `textInput` 事件分发，确保 Gemini/AI Studio 的前端框架（Angular/Lit/React等）能够感知数据变化，从而激活“发送”按钮。
     *   **光标处理**：填入后，将光标移动到文本末尾，方便用户继续补充内容。
 
 ---
@@ -71,7 +72,7 @@
 | :--- | :--- |
 | **Manifest版本** | Manifest V3 |
 | **权限控制** | `storage` (存储数据), `activeTab` 或 `scripting` (操作网页) |
-| **Host Permissions** | `https://gemini.google.com/*` (MVP 严格限制范围) |
+| **Host Permissions** | `https://gemini.google.com/*`, `https://aistudio.google.com/*` |
 | **数据隐私** | 所有 Prompt 数据仅存储在用户本地浏览器 (`local storage`)，不上传云端。 |
 
 ---

@@ -1,18 +1,26 @@
 {
   "manifest_version": 3,
   "name": "PromptSnap",
-  "version": "0.1.0",
-  "description": "一键将预设 Prompt 填入 Gemini 输入框",
+  "version": "0.2.0",
+  "description": "一键将预设 Prompt 填入 AI 输入框 (支持任意网站)",
   "permissions": [
     "storage"
   ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
   "host_permissions": [
-    "https://gemini.google.com/*"
+    "<all_urls>"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://gemini.google.com/*"
+        "<all_urls>"
       ],
       "js": [
         "scripts/content.js"

@@ -1,22 +1,90 @@
-console.log('PromptSnap: Content script loaded for Gemini.');
+// ==========================================
+// PromptSnap Content Script (v0.2.0 Cleaned)
+// ==========================================
 
-// 初始化 PromptSnap
+console.log('PromptSnap: Content script loaded.');
+
+// 1. 默认白名单配置
+const DEFAULT_WHITELIST = {
+    'gemini.google.com': { selector: 'div[contenteditable="true"].rich-textarea, div[contenteditable="true"]' },
+    'aistudio.google.com': { selector: 'textarea[aria-label="Prompt"], textarea' }
+};
+
+// 2. 初始化检查入口
+checkAndInit();
+
+function checkAndInit() {
+    const hostname = window.location.hostname;
+
+    chrome.storage.local.get(['siteSettings'], (result) => {
+        const settings = result.siteSettings || {};
+        const siteConfig = settings[hostname];
+        const defaultConfig = DEFAULT_WHITELIST[hostname];
+
+        // 判定逻辑：以用户配置优先，其次是默认白名单
+        let shouldRun = false;
+        let activeSelector = null;
+
+        if (siteConfig) {
+            shouldRun = siteConfig.enabled;
+            activeSelector = siteConfig.selector;
+        } else if (defaultConfig) {
+            shouldRun = true;
+            activeSelector = defaultConfig.selector;
+        }
+
+        if (shouldRun) {
+            console.log(`PromptSnap: Enabled on ${hostname}`);
+            window.PS_ACTIVE_SELECTOR = activeSelector; // 全局缓存选择器
+            
+            // 确保 DOM 就绪后插入
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initPromptSnap);
+            } else {
+                initPromptSnap();
+            }
+        } else {
+            console.log(`PromptSnap: Disabled on ${hostname}`);
+            removeUI();
+        }
+    });
+}
+
+// 3. 监听 Popup 配置更新
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'UPDATE_SETTINGS') {
+        console.log('PromptSnap: Settings updated, reloading state...');
+        // 重新检查并刷新状态
+        checkAndInit();
+        sendResponse({ status: 'ok' });
+    }
+});
+
+function removeUI() {
+    const fab = document.getElementById('prompt-snap-fab');
+    if (fab) fab.remove();
+    const sidebar = document.getElementById('prompt-snap-sidebar');
+    if (sidebar) sidebar.remove();
+}
+
 function initPromptSnap() {
     createFloatingButton();
 }
 
-// 创建悬浮球
+// ==========================================
+// UI Components: Floating Button
+// ==========================================
+
 function createFloatingButton() {
-    // 检查是否已存在
     if (document.getElementById('prompt-snap-fab')) return;
 
     const fab = document.createElement('div');
     fab.id = 'prompt-snap-fab';
     fab.className = 'prompt-snap-fab';
-    fab.innerText = 'P'; // 简易 Logo
+    fab.innerText = 'P';
     fab.title = 'Open PromptSnap';
     
-    // 添加点击事件 (修改为处理拖拽)
+    // 拖拽逻辑
     let isDragging = false;
     let startY = 0;
     let initialTop = 0;
@@ -25,80 +93,65 @@ function createFloatingButton() {
         isDragging = false;
         startY = e.clientY;
         initialTop = fab.getBoundingClientRect().top;
-        
-        // 绑定移动和松开事件到 document，防止鼠标移出元素导致失效
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
-        
-        e.preventDefault(); // 防止选中文本
+        e.preventDefault();
     });
 
     function onMouseMove(e) {
         const deltaY = e.clientY - startY;
-        if (Math.abs(deltaY) > 5) { // 移动超过5像素视为拖拽
-            isDragging = true;
-        }
-        
-        // 更新位置 (限制在屏幕可视区域内)
+        if (Math.abs(deltaY) > 5) isDragging = true;
         let newTop = initialTop + deltaY;
         const maxTop = window.innerHeight - 40;
         if (newTop < 0) newTop = 0;
         if (newTop > maxTop) newTop = maxTop;
-        
         fab.style.top = newTop + 'px';
     }
 
     function onMouseUp(e) {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
-        
-        if (!isDragging) {
-            console.log('PromptSnap: FAB clicked, toggle sidebar...');
-            toggleSidebar();
-        }
+        if (!isDragging) toggleSidebar();
     }
 
     document.body.appendChild(fab);
 }
 
-// 切换侧边栏
+// ==========================================
+// UI Components: Sidebar
+// ==========================================
+
 function toggleSidebar() {
     const sidebar = document.getElementById('prompt-snap-sidebar');
     if (sidebar) {
         sidebar.classList.toggle('open');
     } else {
         createSidebar();
-        // 首次打开需要一点延迟才有动画效果
-        setTimeout(() => {
+        // 延迟触发 CSS transition
+        requestAnimationFrame(() => {
             document.getElementById('prompt-snap-sidebar').classList.add('open');
-        }, 10);
+        });
     }
 }
 
-// 创建侧边栏
 function createSidebar() {
     const sidebar = document.createElement('div');
     sidebar.id = 'prompt-snap-sidebar';
     sidebar.className = 'prompt-snap-sidebar';
-    
-    // 内部结构
     sidebar.innerHTML = `
         <div class="ps-header">
             <span class="ps-title">PromptSnap</span>
             <button class="ps-close-btn">&times;</button>
         </div>
         <div id="ps-list-view" style="display:flex; flex-direction:column; height:100%;">
-            <div class="ps-list-container" id="ps-list">
-                <!-- 列表项将在这里渲染 -->
-            </div>
+            <div class="ps-list-container" id="ps-list"></div>
             <div class="ps-footer">
                 <button class="ps-add-btn" id="ps-btn-new">+ 新建 Prompt</button>
             </div>
         </div>
-        
         <div id="ps-form-view" class="ps-form">
-            <input type="text" id="ps-input-title" class="ps-input" placeholder="标题 (例如: 代码解释)">
-            <textarea id="ps-input-content" class="ps-textarea" placeholder="Prompt 内容..."></textarea>
+            <input type="text" id="ps-input-title" class="ps-input" placeholder="标题">
+            <textarea id="ps-input-content" class="ps-textarea" placeholder="内容..."></textarea>
             <div class="ps-form-actions">
                 <button class="ps-btn-cancel" id="ps-btn-cancel">取消</button>
                 <button class="ps-add-btn" id="ps-btn-save" style="flex:1">保存</button>
@@ -108,30 +161,24 @@ function createSidebar() {
 
     document.body.appendChild(sidebar);
 
-    // 绑定基础事件
-    sidebar.querySelector('.ps-close-btn').addEventListener('click', () => {
-        sidebar.classList.remove('open');
-    });
-    
+    // Sidebar Events
+    sidebar.querySelector('.ps-close-btn').addEventListener('click', () => sidebar.classList.remove('open'));
     document.getElementById('ps-btn-new').addEventListener('click', () => showForm());
     document.getElementById('ps-btn-cancel').addEventListener('click', () => showList());
     document.getElementById('ps-btn-save').addEventListener('click', saveCurrentPrompt);
 
-    // 加载数据
     loadPrompts();
 }
 
-// 视图切换
 function showForm(prompt = null) {
     document.getElementById('ps-list-view').style.display = 'none';
     const form = document.getElementById('ps-form-view');
     form.classList.add('active');
     
-    // 重置或填充表单
     if (prompt) {
         document.getElementById('ps-input-title').value = prompt.title;
         document.getElementById('ps-input-content').value = prompt.content;
-        form.dataset.editingId = prompt.id; // 标记正在编辑 ID
+        form.dataset.editingId = prompt.id;
     } else {
         document.getElementById('ps-input-title').value = '';
         document.getElementById('ps-input-content').value = '';
@@ -142,35 +189,34 @@ function showForm(prompt = null) {
 function showList() {
     document.getElementById('ps-form-view').classList.remove('active');
     document.getElementById('ps-list-view').style.display = 'flex';
-    loadPrompts(); // 重新加载列表
+    loadPrompts();
 }
 
-// 数据管理：加载 Prompts
+// ==========================================
+// Data Management
+// ==========================================
+
 function loadPrompts() {
     chrome.storage.local.get(['prompts'], (result) => {
         let prompts = result.prompts;
-        
-        // 初始化预置数据 (Onboarding)
         if (!prompts) {
             prompts = [
-                { id: 1, title: '代码解释', content: '请详细解释这段代码的逻辑，并指出潜在的性能问题：' },
-                { id: 2, title: '英文润色', content: '请将以下内容翻译成地道的英文，风格商务专业：' },
-                { id: 3, title: '简单总结', content: '请用简练的语言总结上述内容的核心观点。' }
+                { id: 1, title: '代码解释', content: '请详细解释这段代码的逻辑：' },
+                { id: 2, title: '英文润色', content: '请将以下内容翻译成地道的商务英文：' },
+                { id: 3, title: '简单总结', content: '请用一句话总结上述内容。' }
             ];
             chrome.storage.local.set({ prompts: prompts });
         }
-        
         renderList(prompts);
     });
 }
 
-// 渲染列表
 function renderList(prompts) {
     const listEl = document.getElementById('ps-list');
     listEl.innerHTML = '';
     
     if (prompts.length === 0) {
-        listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">暂无 Prompt，快去新建吧</div>';
+        listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">暂无 Prompt</div>';
         return;
     }
 
@@ -181,120 +227,144 @@ function renderList(prompts) {
             <div class="ps-item-title">${p.title}</div>
             <div class="ps-item-preview">${p.content}</div>
             <div class="ps-item-actions">
-                <button class="ps-action-btn fill btn-fill" data-id="${p.id}">填入</button>
-                <button class="ps-action-btn btn-edit" data-id="${p.id}">编辑</button>
-                <button class="ps-action-btn delete btn-delete" data-id="${p.id}">删除</button>
+                <button class="ps-action-btn fill btn-fill">填入</button>
+                <button class="ps-action-btn btn-clear">清空</button>
+                <button class="ps-action-btn btn-edit">编辑</button>
+                <button class="ps-action-btn delete btn-delete">删除</button>
             </div>
         `;
         
-        // 绑定事件
-        item.querySelector('.btn-fill').addEventListener('click', (e) => {
-            e.stopPropagation();
-            fillPrompt(p.content);
-        });
-        item.querySelector('.btn-edit').addEventListener('click', (e) => {
-            e.stopPropagation();
-            showForm(p);
-        });
-        item.querySelector('.btn-delete').addEventListener('click', (e) => {
-            e.stopPropagation();
-            deletePrompt(p.id);
-        });
-        
-        // 点击整个条目默认填入
+        item.querySelector('.btn-fill').addEventListener('click', (e) => { e.stopPropagation(); fillPrompt(p.content); });
+        item.querySelector('.btn-clear').addEventListener('click', (e) => { e.stopPropagation(); clearInput(); });
+        item.querySelector('.btn-edit').addEventListener('click', (e) => { e.stopPropagation(); showForm(p); });
+        item.querySelector('.btn-delete').addEventListener('click', (e) => { e.stopPropagation(); deletePrompt(p.id); });
         item.addEventListener('click', () => fillPrompt(p.content));
         
         listEl.appendChild(item);
     });
 }
 
-// 保存 Prompt (新增或更新)
 function saveCurrentPrompt() {
     const title = document.getElementById('ps-input-title').value.trim();
     const content = document.getElementById('ps-input-content').value.trim();
-    
-    if (!title || !content) {
-        alert('标题和内容不能为空');
-        return;
-    }
+    if (!title || !content) return alert('不能为空');
 
     const form = document.getElementById('ps-form-view');
     const editingId = form.dataset.editingId ? parseInt(form.dataset.editingId) : null;
 
     chrome.storage.local.get(['prompts'], (result) => {
         let prompts = result.prompts || [];
-        
         if (editingId) {
-            // 更新
             const index = prompts.findIndex(p => p.id === editingId);
-            if (index !== -1) {
-                prompts[index] = { id: editingId, title, content };
-            }
+            if (index !== -1) prompts[index] = { id: editingId, title, content };
         } else {
-            // 新增
-            const newId = Date.now(); // 简单的 ID 生成
-            prompts.push({ id: newId, title, content });
+            prompts.push({ id: Date.now(), title, content });
         }
-        
-        chrome.storage.local.set({ prompts: prompts }, () => {
-            showList(); // 保存成功后返回列表
-        });
+        chrome.storage.local.set({ prompts: prompts }, showList);
     });
 }
 
-// 删除 Prompt
 function deletePrompt(id) {
-    if (!confirm('确定要删除这条 Prompt 吗？')) return;
-    
+    if (!confirm('删除?')) return;
     chrome.storage.local.get(['prompts'], (result) => {
-        let prompts = result.prompts || [];
-        prompts = prompts.filter(p => p.id !== id);
-        
-        chrome.storage.local.set({ prompts: prompts }, () => {
-            loadPrompts(); // 重新加载列表
-        });
+        const prompts = (result.prompts || []).filter(p => p.id !== id);
+        chrome.storage.local.set({ prompts: prompts }, loadPrompts);
     });
 }
 
-// 核心功能：填入 Prompt
+// ==========================================
+// Core: Smart Fill Logic
+// ==========================================
+
 function fillPrompt(text) {
-    // 1. 查找 Gemini 输入框
-    // Gemini 的输入框通常是一个 contenteditable 的 div
-    // 选择器可能会变，这里需要尽可能健壮
-    const editor = document.querySelector('div[contenteditable="true"]') || 
-                   document.querySelector('textarea'); 
-    
-    if (!editor) {
-        alert('未找到输入框，请确保您在 Gemini 聊天界面。');
+    let targetElement = null;
+
+    // 1. 尝试使用配置的选择器
+    if (window.PS_ACTIVE_SELECTOR) {
+        targetElement = document.querySelector(window.PS_ACTIVE_SELECTOR);
+    }
+
+    // 2. 智能探测
+    if (!targetElement) {
+        targetElement = findBestInputCandidate();
+    }
+
+    if (!targetElement) {
+        alert('未找到输入框，请手动点击一下输入区域再试。');
         return;
     }
 
-    // 2. 聚焦
-    editor.focus();
+    injectText(targetElement, text);
+}
 
-    // 3. 填入内容 (模拟用户粘贴或输入)
-    // 简单赋值 innerText 在 React/Angular 中通常无效，需要 execCommand 或模拟事件
-    // document.execCommand('insertText') 已废弃但最有效
-    const success = document.execCommand('insertText', false, text);
-    
-    // 如果 execCommand 失败 (有些现代浏览器限制)，尝试备选方案
-    if (!success) {
-        editor.textContent = text; 
-        
-        // 分发 Input 事件，通知框架数据变了
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
-        editor.dispatchEvent(new Event('change', { bubbles: true }));
+// 清空输入框逻辑
+function clearInput() {
+    let targetElement = null;
+    if (window.PS_ACTIVE_SELECTOR) {
+        targetElement = document.querySelector(window.PS_ACTIVE_SELECTOR);
+    }
+    if (!targetElement) {
+        targetElement = findBestInputCandidate();
     }
 
-    // 4. 反馈
-    // 可选：收起侧边栏
-    // document.getElementById('prompt-snap-sidebar').classList.remove('open');
+    if (targetElement) {
+        targetElement.focus();
+        if (targetElement.tagName === 'INPUT' || targetElement.tagName === 'TEXTAREA') {
+            targetElement.value = '';
+        } else {
+            targetElement.innerHTML = '';
+            targetElement.textContent = '';
+        }
+        // 触发事件通知框架
+        ['input', 'change'].forEach(type => {
+            targetElement.dispatchEvent(new Event(type, { bubbles: true }));
+        });
+        console.log('PromptSnap: Input cleared');
+    }
 }
 
-// 页面加载完成后执行
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initPromptSnap);
-} else {
-    initPromptSnap();
+function findBestInputCandidate() {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT' || active.getAttribute('contenteditable') === 'true')) {
+        return active;
+    }
+
+    const candidates = [
+        ...document.querySelectorAll('textarea'),
+        ...document.querySelectorAll('div[contenteditable="true"]'),
+        ...document.querySelectorAll('input[type="text"]')
+    ];
+
+    const visibleCandidates = candidates.filter(el => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+    });
+
+    if (visibleCandidates.length === 0) return null;
+
+    // 返回面积最大的输入框
+    return visibleCandidates.reduce((prev, current) => {
+        return (current.offsetWidth * current.offsetHeight > prev.offsetWidth * prev.offsetHeight) ? current : prev;
+    });
 }
 
+function injectText(element, text) {
+    element.focus();
+    const success = document.execCommand('insertText', false, text);
+    
+    if (!success) {
+        if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+            const start = element.selectionStart;
+            const end = element.selectionEnd;
+            const val = element.value;
+            element.value = val.slice(0, start) + text + val.slice(end);
+            element.selectionStart = element.selectionEnd = start + text.length;
+        } else {
+            element.textContent += text; 
+        }
+        
+        ['input', 'change', 'textInput', 'keydown', 'keyup'].forEach(type => {
+            element.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+        });
+    }
+}
