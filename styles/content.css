@@ -1,0 +1,217 @@
+/* PromptSnap 样式表 */
+
+/* 悬浮球样式 */
+.prompt-snap-fab {
+    position: fixed;
+    right: 0;
+    top: 50%; /* 初始位置 */
+    width: 40px;
+    height: 40px;
+    background: #4285f4; /* Google Blue */
+    color: white;
+    border-radius: 20px 0 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2147483647; /* Max Z-index */
+    box-shadow: -2px 2px 10px rgba(0,0,0,0.2);
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 20px;
+    user-select: none;
+    transition: width 0.2s ease, background-color 0.2s;
+}
+
+.prompt-snap-fab:hover {
+    width: 50px;
+    background: #3367d6;
+}
+
+.prompt-snap-fab:active {
+    background: #2a56c6;
+}
+
+/* 侧边栏样式 */
+.prompt-snap-sidebar {
+    position: fixed;
+    top: 0;
+    right: -320px; /* 默认隐藏 */
+    width: 320px;
+    height: 100vh;
+    background: #ffffff;
+    box-shadow: -2px 0 12px rgba(0,0,0,0.15);
+    z-index: 2147483646; /* 在 FAB 之下，或者同级 */
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    color: #202124;
+}
+
+.prompt-snap-sidebar.open {
+    right: 0;
+}
+
+/* 侧边栏头部 */
+.ps-header {
+    padding: 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dadce0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ps-title {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.ps-close-btn {
+    cursor: pointer;
+    font-size: 20px;
+    color: #5f6368;
+    background: none;
+    border: none;
+    padding: 4px;
+}
+
+/* 列表容器 */
+.ps-list-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+/* 列表项 */
+.ps-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f3f4;
+    cursor: pointer;
+    transition: background 0.1s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ps-item:hover {
+    background: #f8f9fa;
+}
+
+.ps-item-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #202124;
+}
+
+.ps-item-preview {
+    font-size: 12px;
+    color: #5f6368;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ps-item-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    opacity: 0.6;
+}
+
+.ps-item:hover .ps-item-actions {
+    opacity: 1;
+}
+
+.ps-action-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #dadce0;
+    background: white;
+    cursor: pointer;
+}
+
+.ps-action-btn.fill {
+    color: #1a73e8;
+    border-color: #1a73e8;
+}
+
+.ps-action-btn.delete {
+    color: #d93025;
+}
+
+/* 底部新建按钮 */
+.ps-footer {
+    padding: 16px;
+    border-top: 1px solid #dadce0;
+    background: white;
+}
+
+.ps-add-btn {
+    width: 100%;
+    padding: 10px;
+    background: #1a73e8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ps-add-btn:hover {
+    background: #1557b0;
+}
+
+/* 编辑/新增表单 (默认隐藏) */
+.ps-form {
+    display: none;
+    flex-direction: column;
+    padding: 16px;
+    height: 100%;
+    background: white;
+}
+
+.ps-form.active {
+    display: flex;
+}
+
+.ps-input {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.ps-textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-family: inherit;
+    flex: 1;
+    resize: none;
+    box-sizing: border-box;
+}
+
+.ps-form-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.ps-btn-cancel {
+    flex: 1;
+    padding: 10px;
+    background: #f1f3f4;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+
