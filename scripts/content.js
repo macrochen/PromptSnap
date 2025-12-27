@@ -143,7 +143,7 @@ function createSidebar() {
             <span class="ps-title">PromptSnap</span>
             <button class="ps-close-btn">&times;</button>
         </div>
-        <div id="ps-list-view" style="display:flex; flex-direction:column; height:100%;">
+        <div id="ps-list-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
             <div class="ps-list-container" id="ps-list"></div>
             <div class="ps-footer">
                 <button class="ps-add-btn" id="ps-btn-new">+ 新建 Prompt</button>
@@ -201,13 +201,36 @@ function loadPrompts() {
         let prompts = result.prompts;
         if (!prompts) {
             prompts = [
-                { id: 1, title: '代码解释', content: '请详细解释这段代码的逻辑：' },
-                { id: 2, title: '英文润色', content: '请将以下内容翻译成地道的商务英文：' },
-                { id: 3, title: '简单总结', content: '请用一句话总结上述内容。' }
+                { id: 1, title: '代码解释', content: '请详细解释这段代码的逻辑：', usageCount: 0 },
+                { id: 2, title: '英文润色', content: '请将以下内容翻译成地道的商务英文：', usageCount: 0 },
+                { id: 3, title: '简单总结', content: '请用一句话总结上述内容。', usageCount: 0 }
             ];
             chrome.storage.local.set({ prompts: prompts });
         }
+
+        // 按使用频率排序 (高 -> 低)
+        prompts.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+
         renderList(prompts);
+    });
+}
+
+// 增加使用计数
+function incrementUsage(id) {
+    chrome.storage.local.get(['prompts'], (result) => {
+        let prompts = result.prompts || [];
+        const index = prompts.findIndex(p => p.id === id);
+        
+        if (index !== -1) {
+            // 初始化或增加计数
+            prompts[index].usageCount = (prompts[index].usageCount || 0) + 1;
+            
+            // 保存并重新加载(会触发重排)
+            chrome.storage.local.set({ prompts: prompts }, () => {
+                console.log(`PromptSnap: ID ${id} usage incremented to ${prompts[index].usageCount}`);
+                loadPrompts(); 
+            });
+        }
     });
 }
 
@@ -234,11 +257,20 @@ function renderList(prompts) {
             </div>
         `;
         
-        item.querySelector('.btn-fill').addEventListener('click', (e) => { e.stopPropagation(); fillPrompt(p.content); });
+        item.querySelector('.btn-fill').addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            fillPrompt(p.content);
+            incrementUsage(p.id);
+        });
         item.querySelector('.btn-clear').addEventListener('click', (e) => { e.stopPropagation(); clearInput(); });
         item.querySelector('.btn-edit').addEventListener('click', (e) => { e.stopPropagation(); showForm(p); });
         item.querySelector('.btn-delete').addEventListener('click', (e) => { e.stopPropagation(); deletePrompt(p.id); });
-        item.addEventListener('click', () => fillPrompt(p.content));
+        
+        // 点击整个条目默认填入并增加计数
+        item.addEventListener('click', () => {
+            fillPrompt(p.content);
+            incrementUsage(p.id);
+        });
         
         listEl.appendChild(item);
     });
@@ -247,20 +279,49 @@ function renderList(prompts) {
 function saveCurrentPrompt() {
     const title = document.getElementById('ps-input-title').value.trim();
     const content = document.getElementById('ps-input-content').value.trim();
-    if (!title || !content) return alert('不能为空');
+    
+    if (!title || !content) {
+        alert('标题和内容不能为空');
+        return;
+    }
 
     const form = document.getElementById('ps-form-view');
-    const editingId = form.dataset.editingId ? parseInt(form.dataset.editingId) : null;
+    // 获取编辑 ID (字符串)
+    const editingIdRaw = form.dataset.editingId;
 
     chrome.storage.local.get(['prompts'], (result) => {
         let prompts = result.prompts || [];
-        if (editingId) {
-            const index = prompts.findIndex(p => p.id === editingId);
-            if (index !== -1) prompts[index] = { id: editingId, title, content };
-        } else {
-            prompts.push({ id: Date.now(), title, content });
+        let isUpdate = false;
+
+        if (editingIdRaw) {
+            // 尝试查找 (同时兼容数字 ID 和字符串 ID)
+            const index = prompts.findIndex(p => p.id == editingIdRaw); // 使用宽松相等
+            
+            if (index !== -1) {
+                // 执行更新
+                prompts[index] = { 
+                    id: prompts[index].id, // 保持原 ID 类型
+                    title, 
+                    content 
+                };
+                isUpdate = true;
+                console.log('PromptSnap: Updated prompt', prompts[index]);
+            } else {
+                console.warn('PromptSnap: Editing ID not found, creating new instead.');
+            }
         }
-        chrome.storage.local.set({ prompts: prompts }, showList);
+
+        if (!isUpdate) {
+            // 新增
+            const newId = Date.now();
+            prompts.push({ id: newId, title, content });
+            console.log('PromptSnap: Created new prompt', newId);
+        }
+        
+        chrome.storage.local.set({ prompts: prompts }, () => {
+            console.log('PromptSnap: Saved to storage');
+            showList();
+        });
     });
 }
 
@@ -363,8 +424,54 @@ function injectText(element, text) {
             element.textContent += text; 
         }
         
-        ['input', 'change', 'textInput', 'keydown', 'keyup'].forEach(type => {
-            element.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+                ['input', 'change', 'textInput', 'keydown', 'keyup'].forEach(type => {
+        
+                    element.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+        
+                });
+        
+            }
+        
+        }
+        
+        
+        
+        // ==========================================
+        
+        // Event Listener: Auto-close Sidebar
+        
+        // ==========================================
+        
+        document.addEventListener('click', (e) => {
+        
+            const sidebar = document.getElementById('prompt-snap-sidebar');
+        
+            const fab = document.getElementById('prompt-snap-fab');
+        
+            
+        
+            // 只有当侧边栏存在且打开时才检测
+        
+            if (!sidebar || !sidebar.classList.contains('open')) return;
+        
+        
+        
+            // 如果点击的是悬浮球，忽略 (防止冲突)
+        
+            if (fab && fab.contains(e.target)) return;
+        
+        
+        
+            // 如果点击的是侧边栏内部，忽略
+        
+            if (sidebar.contains(e.target)) return;
+        
+        
+        
+            // 点击了外部区域 -> 关闭侧边栏
+        
+            sidebar.classList.remove('open');
+        
         });
-    }
-}
+        
+        
