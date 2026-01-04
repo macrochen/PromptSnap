@@ -9,6 +9,13 @@
         .btn-add { background: #1a73e8; color: white; border: none; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
         .btn-add:hover { background: #1557b0; }
         
+        /* 筛选栏样式 */
+        .tags-bar { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; border-bottom: 1px solid #f1f3f4; background: white; -webkit-overflow-scrolling: touch; }
+        .tags-bar::-webkit-scrollbar { display: none; } /* 隐藏滚动条 */
+        .tag { font-size: 12px; padding: 4px 12px; border-radius: 12px; background: #f1f3f4; color: #5f6368; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
+        .tag:hover { background: #e8eaed; }
+        .tag.active { background: #e8f0fe; color: #1a73e8; border-color: #d2e3fc; font-weight: 500; }
+
         .list { max-height: 400px; overflow-y: auto; }
         .item { padding: 12px 16px; border-bottom: 1px solid #f1f3f4; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: background 0.1s; }
         .item:hover { background: #f8f9fa; }
@@ -31,6 +38,9 @@
     <div class="header">
         <span class="title">PromptSnap</span>
         <button class="btn-add" id="btn-add">New</button>
+    </div>
+    <div class="tags-bar" id="tags-bar">
+        <!-- JS 渲染分类标签 -->
     </div>
     <div class="list" id="list">
         <!-- JS 渲染列表 -->
