@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PromptSnap Editor</title>
+    <style>
+        body { font-family: 'Google Sans', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; background: #f8f9fa; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; color: #202124; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #5f6368; }
+        input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #dadce0; border-radius: 4px; font-family: inherit; font-size: 14px; box-sizing: border-box; }
+        textarea { height: 300px; resize: vertical; }
+        input:focus, textarea:focus { border-color: #1a73e8; outline: none; }
+        .actions { margin-top: 30px; display: flex; justify-content: flex-end; gap: 12px; }
+        button { padding: 10px 24px; border-radius: 4px; font-weight: 500; cursor: pointer; border: none; font-size: 14px; }
+        .btn-cancel { background: #f1f3f4; color: #3c4043; }
+        .btn-save { background: #1a73e8; color: white; }
+        .btn-save:hover { background: #1557b0; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1 id="page-title">新建 Prompt</h1>
+        <div class="form-group">
+            <label>标题 (Title)</label>
+            <input type="text" id="input-title" placeholder="例如: 代码解释器">
+        </div>
+        <div class="form-group">
+            <label>内容 (Content)</label>
+            <textarea id="input-content" placeholder="输入您的提示词..."></textarea>
+        </div>
+        <div class="actions">
+            <button class="btn-cancel" id="btn-cancel">取消</button>
+            <button class="btn-save" id="btn-save">保存</button>
+        </div>
+    </div>
+    <script src="editor.js"></script>
+</body>
+</html>
