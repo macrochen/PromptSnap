@@ -51,15 +51,29 @@
         <!-- JS 渲染列表 -->
     </div>
 
-    <!-- 数据管理页面 (默认隐藏) -->
-    <div id="view-data" style="display: none; padding: 16px;">
+    <!-- 设置页面 (默认隐藏) -->
+    <div id="view-settings" style="display: none; padding: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 15px;">数据备份与恢复</h3>
-            <button id="btn-back-data" style="background: none; border: none; cursor: pointer; color: #1a73e8; font-size: 13px;">返回</button>
+            <h3 style="margin: 0; font-size: 15px;">设置</h3>
+            <button id="btn-back-settings" style="background: none; border: none; cursor: pointer; color: #1a73e8; font-size: 13px;">返回</button>
+        </div>
+
+        <!-- AI 网站配置 -->
+        <div style="margin-bottom: 24px; border-bottom: 1px solid #f1f3f4; padding-bottom: 20px;">
+            <div style="font-weight: 500; margin-bottom: 12px; font-size: 13px;">AI 网站配置</div>
+            <div id="sites-list" style="margin-bottom: 12px; max-height: 150px; overflow-y: auto; background: #fff; border: 1px solid #f1f3f4; border-radius: 4px;">
+                <!-- JS 渲染站点列表 -->
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <input type="text" id="site-name" placeholder="网站名称 (如: Gemini)" style="padding: 8px; border: 1px solid #dadce0; border-radius: 4px; font-size: 12px;">
+                <input type="text" id="site-url" placeholder="URL (如: https://gemini.google.com/)" style="padding: 8px; border: 1px solid #dadce0; border-radius: 4px; font-size: 12px;">
+                <button id="btn-add-site" style="background: #1a73e8; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 12px;">添加网站</button>
+            </div>
         </div>
         
+        <!-- 数据备份与恢复 -->
         <div style="margin-bottom: 24px;">
-            <div style="font-weight: 500; margin-bottom: 8px; font-size: 13px;">导出数据</div>
+            <div style="font-weight: 500; margin-bottom: 8px; font-size: 13px;">数据备份</div>
             <div style="font-size: 12px; color: #5f6368; margin-bottom: 8px;">将所有 Prompt 导出为 JSON 文件进行备份。</div>
             <button id="btn-export" style="width: 100%; padding: 8px; border: 1px solid #dadce0; background: white; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <svg viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
@@ -68,7 +82,7 @@
         </div>
 
         <div>
-            <div style="font-weight: 500; margin-bottom: 8px; font-size: 13px;">导入数据</div>
+            <div style="font-weight: 500; margin-bottom: 8px; font-size: 13px;">数据恢复</div>
             <div style="font-size: 12px; color: #5f6368; margin-bottom: 8px;">从 JSON 文件恢复或合并 Prompt。</div>
             <button id="btn-import" style="width: 100%; padding: 8px; border: 1px solid #dadce0; background: white; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                 <svg viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
@@ -79,11 +93,21 @@
     </div>
 
     <!-- 变量输入模态框 (默认隐藏) -->
-    <div id="variable-modal" style="display: none; padding: 16px;">
-        <h3 style="margin-top: 0; font-size: 15px; color: #202124;">输入变量</h3>
+    <div id="variable-modal" style="display: none; padding: 16px; border-top: 1px solid #f1f3f4;">
+        <h3 style="margin-top: 0; font-size: 15px; color: #202124;">执行配置</h3>
         <div id="variable-inputs">
             <!-- JS 动态填充输入框 -->
         </div>
+        
+        <!-- 目标站点选择 -->
+        <div style="margin-top: 12px; margin-bottom: 16px;">
+            <label style="display: block; font-size: 12px; margin-bottom: 4px; color: #5f6368;">目标网站</label>
+            <select id="select-target-site" style="width: 100%; padding: 8px; border: 1px solid #dadce0; border-radius: 4px; background: white;">
+                <option value="">当前页面</option>
+                <!-- JS 动态填充站点 -->
+            </select>
+        </div>
+
         <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
             <button id="btn-var-cancel" style="background: #f1f3f4; color: #3c4043; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">取消</button>
             <button id="btn-var-confirm" style="background: #1a73e8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">确认</button>
