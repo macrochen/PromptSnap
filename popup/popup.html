@@ -45,6 +45,19 @@
     <div class="list" id="list">
         <!-- JS 渲染列表 -->
     </div>
+
+    <!-- 变量输入模态框 (默认隐藏) -->
+    <div id="variable-modal" style="display: none; padding: 16px;">
+        <h3 style="margin-top: 0; font-size: 15px; color: #202124;">输入变量</h3>
+        <div id="variable-inputs">
+            <!-- JS 动态填充输入框 -->
+        </div>
+        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+            <button id="btn-var-cancel" style="background: #f1f3f4; color: #3c4043; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">取消</button>
+            <button id="btn-var-confirm" style="background: #1a73e8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">确认</button>
+        </div>
+    </div>
+
     <script src="popup.js"></script>
 </body>
 </html>

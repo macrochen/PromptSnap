@@ -119,6 +119,120 @@ function renderList(prompts) {
 
 // 核心：发送消息给当前页面
 async function handleFill(prompt) {
+    const content = prompt.content;
+    const variableRegex = /{{\s*(.*?)\s*}}/g;
+    const matches = [...content.matchAll(variableRegex)];
+
+    if (matches.length > 0) {
+        // 发现变量，进入变量填入模式
+        showVariableInput(prompt, matches);
+    } else {
+        // 无变量，直接发送
+        sendToContent(content, prompt.id);
+    }
+}
+
+function showVariableInput(prompt, matches) {
+    // 隐藏主列表，显示变量输入页
+    document.querySelector('.header').style.display = 'none';
+    document.getElementById('tags-bar').style.display = 'none';
+    document.getElementById('list').style.display = 'none';
+    
+    const modal = document.getElementById('variable-modal');
+    const inputsContainer = document.getElementById('variable-inputs');
+    modal.style.display = 'block';
+    inputsContainer.innerHTML = '';
+
+    // 提取不重复的变量名
+    const uniqueVars = [...new Set(matches.map(m => m[1]))];
+
+    // 生成输入框
+    uniqueVars.forEach((varName, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.marginBottom = '12px';
+        
+        const label = document.createElement('label');
+        label.textContent = varName;
+        label.style.display = 'block';
+        label.style.fontSize = '12px';
+        label.style.marginBottom = '4px';
+        label.style.color = '#5f6368';
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.dataset.varName = varName;
+        input.style.width = '100%';
+        input.style.padding = '8px';
+        input.style.border = '1px solid #dadce0';
+        input.style.borderRadius = '4px';
+        input.style.boxSizing = 'border-box';
+        
+        // 自动聚焦第一个输入框
+        if (index === 0) {
+            setTimeout(() => input.focus(), 10);
+        }
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        inputsContainer.appendChild(wrapper);
+    });
+
+    // 绑定按钮事件 (先解绑防止多次绑定)
+    const btnConfirm = document.getElementById('btn-var-confirm');
+    const btnCancel = document.getElementById('btn-var-cancel');
+    
+    // 使用 cloneNode 清除之前的事件监听器
+    const newBtnConfirm = btnConfirm.cloneNode(true);
+    const newBtnCancel = btnCancel.cloneNode(true);
+    btnConfirm.parentNode.replaceChild(newBtnConfirm, btnConfirm);
+    btnCancel.parentNode.replaceChild(newBtnCancel, btnCancel);
+
+    // 为输入框添加回车监听
+    const allInputs = inputsContainer.querySelectorAll('input');
+    allInputs.forEach((input, index) => {
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index < allInputs.length - 1) {
+                    allInputs[index + 1].focus();
+                } else {
+                    newBtnConfirm.click();
+                }
+            }
+        });
+    });
+
+    newBtnConfirm.addEventListener('click', () => {
+        let finalContent = prompt.content;
+        const inputs = inputsContainer.querySelectorAll('input');
+        
+        inputs.forEach(input => {
+            const varName = input.dataset.varName;
+            const value = input.value;
+            // 全局替换
+            // 注意：这里简单替换，如果变量名包含特殊正则字符可能会有问题，但在简单场景下够用
+            // 更严谨的做法是构造正则时 escape 变量名
+            const regex = new RegExp(`{{\\s*${escapeRegExp(varName)}\\s*}}`, 'g');
+            finalContent = finalContent.replace(regex, value);
+        });
+
+        sendToContent(finalContent, prompt.id);
+    });
+
+    newBtnCancel.addEventListener('click', () => {
+        // 恢复显示
+        document.querySelector('.header').style.display = 'flex';
+        document.getElementById('tags-bar').style.display = 'flex';
+        document.getElementById('list').style.display = 'block';
+        modal.style.display = 'none';
+    });
+}
+
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function sendToContent(text, promptId) {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab) return;
@@ -126,14 +240,14 @@ async function handleFill(prompt) {
         // 发送消息
         chrome.tabs.sendMessage(tab.id, { 
             action: 'FILL_PROMPT', 
-            text: prompt.content 
+            text: text 
         }, (response) => {
             // 检查是否有错误
             if (chrome.runtime.lastError) {
                 alert('请刷新当前页面后再试 (PromptSnap 需要页面重新加载)');
             } else {
                 // 成功 -> 增加计数 + 关闭弹窗
-                incrementUsage(prompt.id);
+                if (promptId) incrementUsage(promptId);
                 window.close();
             }
         });
