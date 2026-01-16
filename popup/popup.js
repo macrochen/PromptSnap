@@ -6,7 +6,128 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-add').addEventListener('click', () => {
         chrome.tabs.create({ url: 'editor.html' });
     });
+
+    // --- 数据管理页面逻辑 ---
+    
+    // 打开设置 (数据管理)
+    document.getElementById('btn-settings').addEventListener('click', () => {
+        toggleDataView(true);
+    });
+
+    // 返回
+    document.getElementById('btn-back-data').addEventListener('click', () => {
+        toggleDataView(false);
+    });
+
+    // 导出
+    document.getElementById('btn-export').addEventListener('click', exportPrompts);
+
+    // 导入
+    const fileInput = document.getElementById('file-import');
+    document.getElementById('btn-import').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', importPrompts);
+
+    // 监听模态框取消/确认 (确认逻辑在 showVariableInput 中动态绑定)
+    document.getElementById('btn-var-cancel').addEventListener('click', () => {
+        closeVariableModal();
+    });
 });
+
+function toggleDataView(show) {
+    const dataView = document.getElementById('view-data');
+    const header = document.querySelector('.header');
+    const tags = document.getElementById('tags-bar');
+    const list = document.getElementById('list');
+
+    if (show) {
+        dataView.style.display = 'block';
+        header.style.display = 'none';
+        tags.style.display = 'none';
+        list.style.display = 'none';
+    } else {
+        dataView.style.display = 'none';
+        header.style.display = 'flex';
+        tags.style.display = 'flex';
+        list.style.display = 'block';
+        loadPrompts(); // 刷新列表以显示可能导入的数据
+    }
+}
+
+function exportPrompts() {
+    chrome.storage.local.get(['prompts'], (result) => {
+        const prompts = result.prompts || [];
+        const blob = new Blob([JSON.stringify(prompts, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        const date = new Date().toISOString().slice(0, 10);
+        a.download = `promptsnap_backup_${date}.json`;
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+}
+
+function importPrompts(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const imported = JSON.parse(e.target.result);
+            if (!Array.isArray(imported)) {
+                alert('文件格式错误：必须是 Prompt 数组');
+                return;
+            }
+
+            chrome.storage.local.get(['prompts'], (result) => {
+                let currentPrompts = result.prompts || [];
+                
+                // 合并逻辑：使用 ID 作为唯一标识
+                // 1. 创建现有 ID 的 Set
+                const currentIds = new Set(currentPrompts.map(p => p.id));
+                
+                let addedCount = 0;
+                let updatedCount = 0;
+
+                imported.forEach(p => {
+                    if (!p.id || !p.title || !p.content) return; // 简单校验
+                    
+                    if (currentIds.has(p.id)) {
+                        // 更新
+                        const index = currentPrompts.findIndex(cp => cp.id === p.id);
+                        currentPrompts[index] = p;
+                        updatedCount++;
+                    } else {
+                        // 新增
+                        currentPrompts.push(p);
+                        addedCount++;
+                    }
+                });
+
+                chrome.storage.local.set({ prompts: currentPrompts }, () => {
+                    alert(`导入成功！\n新增: ${addedCount} 条\n更新: ${updatedCount} 条`);
+                    document.getElementById('file-import').value = ''; // 重置 input
+                });
+            });
+        } catch (err) {
+            alert('导入失败：JSON 解析错误');
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function closeVariableModal() {
+    document.querySelector('.header').style.display = 'flex';
+    document.getElementById('tags-bar').style.display = 'flex';
+    document.getElementById('list').style.display = 'block';
+    document.getElementById('variable-modal').style.display = 'none';
+}
 
 function loadPrompts() {
     chrome.storage.local.get(['prompts'], (result) => {
