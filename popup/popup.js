@@ -82,6 +82,7 @@ function loadSites() {
                 item.style.borderBottom = '1px solid #f1f3f4';
                 item.style.fontSize = '12px';
                 
+                // Use backticks for multi-line string
                 item.innerHTML = `
                     <div>
                         <div style="font-weight:500;">${escapeHtml(site.name)}</div>
@@ -290,7 +291,7 @@ function closeVariableModal() {
 }
 
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function sendToContent(text, promptId) {
@@ -390,6 +391,7 @@ function renderList(prompts) {
         const item = document.createElement('div');
         item.className = 'item';
         
+        // Use backticks for multi-line string
         item.innerHTML = `
             <div class="item-title" title="${escapeHtml(p.content)}">
                 ${escapeHtml(p.title)}
@@ -425,7 +427,8 @@ function renderList(prompts) {
         item.querySelector('.icon-copy').addEventListener('click', (e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(p.content).then(() => {
-                // 视觉反馈
+                showToast('已复制');
+                // 视觉反馈：图标变化
                 const btn = e.currentTarget;
                 const originalHtml = btn.innerHTML;
                 btn.innerHTML = '<svg viewBox="0 0 24 24" style="color:#188038"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
@@ -467,6 +470,20 @@ function escapeHtml(text) {
                .replace(/>/g, "&gt;")
                .replace(/"/g, "&quot;")
                .replace(/'/g, "&#039;");
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.style.display = 'block';
+    toast.style.opacity = '1';
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 300);
+    }, 1500);
 }
 
 function exportPrompts() {
