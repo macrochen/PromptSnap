@@ -84,10 +84,10 @@ function loadSites() {
                 
                 item.innerHTML = `
                     <div>
-                        <div style=\"font-weight:500;\">${escapeHtml(site.name)}</div>
-                        <div style=\"color:#9aa0a6; font-size:11px;\">${escapeHtml(site.url)}</div>
+                        <div style="font-weight:500;">${escapeHtml(site.name)}</div>
+                        <div style="color:#9aa0a6; font-size:11px;">${escapeHtml(site.url)}</div>
                     </div>
-                    <button class=\"btn-del-site\" style=\"border:none; background:none; color:#d93025; cursor:pointer; font-size:11px;\">删除</button>
+                    <button class="btn-del-site" style="border:none; background:none; color:#d93025; cursor:pointer; font-size:11px;">删除</button>
                 `;
                 
                 item.querySelector('.btn-del-site').addEventListener('click', () => {
@@ -391,18 +391,21 @@ function renderList(prompts) {
         item.className = 'item';
         
         item.innerHTML = `
-            <div class=\"item-title\" title=\"${escapeHtml(p.content)}\">
+            <div class="item-title" title="${escapeHtml(p.content)}">
                 ${escapeHtml(p.title)}
             </div>
-            <div class=\"item-actions\">
-                <button class=\"icon-btn icon-launch\" title=\"选择网站执行\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M13 2.03v2.02c4.39.54 7.5 4.53 6.96 8.92-.46 3.64-3.32 6.53-6.96 6.96v2c5.5-.55 9.5-5.43 8.95-10.93-.45-4.75-4.22-8.5-8.95-8.97zm-2 0c-4.75.47-8.5 4.22-8.95 8.97-.55 5.5 3.45 10.38 8.95 10.93v-2C7.32 19.48 4.46 16.59 4 12.95c-.54-4.39 2.57-8.38 6.96-8.92V2.03zM11 6v6h2V6h-2z"/></svg>
+            <div class="item-actions">
+                <button class="icon-btn icon-launch" title="选择网站执行">
+                    <svg viewBox="0 0 24 24"><path d="M13 2.03v2.02c4.39.54 7.5 4.53 6.96 8.92-.46 3.64-3.32 6.53-6.96 6.96v2c5.5-.55 9.5-5.43 8.95-10.93-.45-4.75-4.22-8.5-8.95-8.97zm-2 0c-4.75.47-8.5 4.22-8.95 8.97-.55 5.5 3.45 10.38 8.95 10.93v-2C7.32 19.48 4.46 16.59 4 12.95c-.54-4.39 2.57-8.38 6.96-8.92V2.03zM11 6v6h2V6h-2z"></svg>
                 </button>
-                <button class=\"icon-btn icon-edit\" title=\"编辑\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                <button class="icon-btn icon-copy" title="复制内容">
+                    <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></svg>
                 </button>
-                <button class=\"icon-btn icon-delete\" title=\"删除\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                <button class="icon-btn icon-edit" title="编辑">
+                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></svg>
+                </button>
+                <button class="icon-btn icon-delete" title="删除">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></svg>
                 </button>
             </div>
         `;
@@ -418,13 +421,27 @@ function renderList(prompts) {
             handleFill(p, { forceModal: true });
         });
 
-        // 3. 编辑
+        // 3. 复制按钮
+        item.querySelector('.icon-copy').addEventListener('click', (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(p.content).then(() => {
+                // 视觉反馈
+                const btn = e.currentTarget;
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<svg viewBox="0 0 24 24" style="color:#188038"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                }, 1000);
+            });
+        });
+
+        // 4. 编辑
         item.querySelector('.icon-edit').addEventListener('click', (e) => {
             e.stopPropagation();
             chrome.tabs.create({ url: `editor.html?id=${p.id}` });
         });
 
-        // 4. 删除
+        // 5. 删除
         item.querySelector('.icon-delete').addEventListener('click', (e) => {
             e.stopPropagation();
             if (confirm(`确定要删除 "${p.title}" 吗？`)) {
