@@ -223,8 +223,30 @@ function showVariableInput(prompt, matches) {
     modal.style.display = 'block';
     inputsContainer.innerHTML = '';
 
-    // 1. 处理变量输入框
-    const uniqueVars = [...new Set(matches.map(m => m[1]))];
+    // 1. 解析变量 (处理 {{name:default}})
+    const varsMap = new Map(); // name -> defaultVal
+    
+    matches.forEach(m => {
+        const inner = m[1];
+        let name = inner;
+        let def = '';
+        
+        // 检查是否有默认值
+        if (inner.includes(':')) {
+            const parts = inner.split(':');
+            name = parts[0].trim();
+            def = parts.slice(1).join(':').trim(); // 处理值中包含冒号的情况
+        } else {
+            name = name.trim();
+        }
+        
+        // 如果未存过，或者当前有值且之前没存默认值，则更新
+        if (!varsMap.has(name) || (def && !varsMap.get(name))) {
+            varsMap.set(name, def);
+        }
+    });
+
+    const uniqueVars = Array.from(varsMap.keys());
 
     if (uniqueVars.length === 0) {
         // 如果没有变量 (是从 Launch 进来的)，显示提示
@@ -237,6 +259,8 @@ function showVariableInput(prompt, matches) {
     } else {
         // 生成输入框
         uniqueVars.forEach((varName, index) => {
+            const defaultVal = varsMap.get(varName);
+            
             const wrapper = document.createElement('div');
             wrapper.style.marginBottom = '12px';
             
@@ -250,11 +274,17 @@ function showVariableInput(prompt, matches) {
             const input = document.createElement('input');
             input.type = 'text';
             input.dataset.varName = varName;
+            input.value = defaultVal; // 设置默认值
             input.style.width = '100%';
             input.style.padding = '8px';
             input.style.border = '1px solid #dadce0';
             input.style.borderRadius = '4px';
             input.style.boxSizing = 'border-box';
+            
+            // 聚焦时全选文本
+            input.addEventListener('focus', function() {
+                this.select();
+            });
             
             // 自动聚焦第一个
             if (index === 0) {
@@ -296,10 +326,13 @@ function showVariableInput(prompt, matches) {
         let finalContent = prompt.content;
         const inputs = inputsContainer.querySelectorAll('input');
         
+        // 替换逻辑升级：支持匹配带默认值的写法
         inputs.forEach(input => {
             const varName = input.dataset.varName;
             const value = input.value;
-            const regex = new RegExp(`{{\s*${escapeRegExp(varName)}\s*}}`, 'g');
+            // 匹配 {{ varName }} 或 {{ varName:default }}
+            // 解释: {{\s* 匹配开头; escape(varName) 匹配变量名; \s*(?::.*?)? 匹配可选的冒号和默认值; \s*}} 匹配结尾
+            const regex = new RegExp(`{{\s*${escapeRegExp(varName)}\s*(?::.*?)?\s*}}`, 'g');
             finalContent = finalContent.replace(regex, value);
         });
 
@@ -312,8 +345,9 @@ function showVariableInput(prompt, matches) {
                 url: targetUrl,
                 text: finalContent,
                 promptId: prompt.id
+            }, () => {
+                window.close(); // 确保消息发送成功后再关闭
             });
-            window.close(); // 关闭 Popup
         } else {
             // 在当前页面填入
             sendToContent(finalContent, prompt.id);

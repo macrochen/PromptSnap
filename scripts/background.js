@@ -15,6 +15,13 @@ async function handleOpenAndFill(url, text, promptId) {
         console.log('PromptSnap: Creating new tab...', url);
         const tab = await chrome.tabs.create({ url: url, active: true });
         
+        // 检查是否已经加载完成 (防止加载过快错过事件)
+        if (tab.status === 'complete') {
+            console.log('PromptSnap: Tab already loaded. Injecting immediately.');
+            attemptFill(tab.id, text, promptId, 0);
+            return;
+        }
+
         // 监听 Tab 更新
         const listener = (tabId, changeInfo, tabInfo) => {
             if (tabId === tab.id && changeInfo.status === 'complete') {
