@@ -88,17 +88,18 @@ function loadSites() {
                 item.style.borderBottom = '1px solid #f1f3f4';
                 item.style.fontSize = '12px';
                 
+                // Use backticks for multi-line string
                 item.innerHTML = `
-                    <div style=\"flex: 1; margin-right: 8px;">
-                        <div style=\"font-weight:500;">${escapeHtml(site.name)}</div>
-                        <div style=\"color:#9aa0a6; font-size:11px;">${escapeHtml(site.url)}</div>
+                    <div style="flex: 1; margin-right: 8px;">
+                        <div style="font-weight:500;">${escapeHtml(site.name)}</div>
+                        <div style="color:#9aa0a6; font-size:11px;">${escapeHtml(site.url)}</div>
                     </div>
-                    <div style=\"display: flex; gap: 4px;">
-                        <button class=\"icon-btn icon-edit-site\" style=\"border:none; background:none; cursor:pointer; color:#1a73e8;\" title=\"编辑\">
-                            <svg viewBox=\"0 0 24 24\"><path d=\"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z\"></svg>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="icon-btn icon-edit-site" style="border:none; background:none; cursor:pointer; color:#1a73e8;" title="编辑">
+                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></svg>
                         </button>
-                        <button class=\"btn-del-site\" style=\"border:none; background:none; color:#d93025; cursor:pointer;\" title=\"删除\">
-                            <svg viewBox=\"0 0 24 24\"><path d=\"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z\"></svg>
+                        <button class="btn-del-site" style="border:none; background:none; color:#d93025; cursor:pointer;" title="删除">
+                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></svg>
                         </button>
                     </div>
                 `;
@@ -199,20 +200,67 @@ function updateSiteSelect() {
 // ========================================== 
 
 async function handleFill(prompt, options = {}) {
+    console.log('[Debug] handleFill triggered for:', prompt.id);
     const content = prompt.content;
-    const variableRegex = /{{\s*(.*?)\s*}}/g;
+    // 增强正则：支持换行符 ([\s\S])
+    const variableRegex = /{{\s*([\s\S]*?)\s*}}/g;
     const matches = [...content.matchAll(variableRegex)];
+    
+    console.log('[Debug] Variable matches found:', matches.length);
 
     // 如果有变量，或者强制显示模态框 (例如点击了 Launch 图标)
     if (matches.length > 0 || options.forceModal) {
-        showVariableInput(prompt, matches);
+        console.log('[Debug] Showing variable input modal...');
+        showVariableInput(prompt, matches, { showSiteSelector: true }, (finalContent) => {
+            console.log('[Debug] Variable input confirmed. Final content length:', finalContent.length);
+            
+            // 确认回调：执行填入逻辑
+            const targetUrl = document.getElementById('select-target-site').value;
+            if (targetUrl) {
+                // Launch: 在新标签页打开
+                console.log('[Debug] Launching new tab:', targetUrl);
+                incrementUsage(prompt.id, () => {
+                    chrome.runtime.sendMessage({
+                        action: 'OPEN_AND_FILL',
+                        url: targetUrl,
+                        text: finalContent,
+                        promptId: prompt.id
+                    }, () => {
+                        window.close(); 
+                    });
+                });
+            } else {
+                // 在当前页面填入
+                console.log('[Debug] Filling current page...');
+                sendToContent(finalContent, prompt.id);
+            }
+        });
     } else {
         // 直接填入当前页面
+        console.log('[Debug] No variables. Filling directly...');
         sendToContent(content, prompt.id);
     }
 }
 
-function showVariableInput(prompt, matches) {
+async function handleCopy(prompt, btnElement) {
+    console.log('[Debug] handleCopy triggered for:', prompt.id, prompt.title);
+    const content = prompt.content;
+    const variableRegex = /{{\s*([\s\S]*?)\s*}}/g;
+    const matches = [...content.matchAll(variableRegex)];
+
+    if (matches.length > 0) {
+        // 有变量：先显示输入框，确认后再复制
+        showVariableInput(prompt, matches, { showSiteSelector: false }, (finalContent) => {
+            copyToClipboard(finalContent, btnElement, prompt.id); // 复制处理后的文本
+            closeVariableModal(); // 关闭弹窗返回列表
+        });
+    } else {
+        // 无变量：直接复制原始文本
+        copyToClipboard(content, btnElement, prompt.id);
+    }
+}
+
+function showVariableInput(prompt, matches, options = {}, onConfirm) {
     // 隐藏主列表，显示变量输入页
     document.querySelector('.header').style.display = 'none';
     document.getElementById('tags-bar').style.display = 'none';
@@ -220,6 +268,15 @@ function showVariableInput(prompt, matches) {
     
     const modal = document.getElementById('variable-modal');
     const inputsContainer = document.getElementById('variable-inputs');
+    
+    // 控制站点选择器的显示/隐藏
+    const siteSelectorDiv = document.getElementById('select-target-site').parentNode;
+    if (options.showSiteSelector) {
+        siteSelectorDiv.style.display = 'block';
+    } else {
+        siteSelectorDiv.style.display = 'none';
+    }
+
     modal.style.display = 'block';
     inputsContainer.innerHTML = '';
 
@@ -227,6 +284,7 @@ function showVariableInput(prompt, matches) {
     const varsMap = new Map(); // name -> defaultVal
     
     matches.forEach(m => {
+        // m[1] 是捕获组的内容
         const inner = m[1];
         let name = inner;
         let def = '';
@@ -251,7 +309,7 @@ function showVariableInput(prompt, matches) {
     if (uniqueVars.length === 0) {
         // 如果没有变量 (是从 Launch 进来的)，显示提示
         const msg = document.createElement('div');
-        msg.textContent = '此 Prompt 无需变量，请选择目标网站执行。';
+        msg.textContent = '此 Prompt 无需变量，请直接确认。';
         msg.style.color = '#5f6368';
         msg.style.fontSize = '13px';
         msg.style.marginBottom = '12px';
@@ -297,8 +355,10 @@ function showVariableInput(prompt, matches) {
         });
     }
 
-    // 2. 填充站点选择下拉框
-    updateSiteSelect();
+    // 2. 填充站点选择下拉框 (如果显示的话)
+    if (options.showSiteSelector) {
+        updateSiteSelect();
+    }
 
     // 3. 绑定确认按钮逻辑
     const btnConfirm = document.getElementById('btn-var-confirm');
@@ -331,27 +391,13 @@ function showVariableInput(prompt, matches) {
             const varName = input.dataset.varName;
             const value = input.value;
             // 匹配 {{ varName }} 或 {{ varName:default }}
-            // 解释: {{\s* 匹配开头; escape(varName) 匹配变量名; \s*(?::.*?)? 匹配可选的冒号和默认值; \s*}} 匹配结尾
-            const regex = new RegExp(`{{\s*${escapeRegExp(varName)}\s*(?::.*?)?\s*}}`, 'g');
+            // 支持默认值中包含换行符
+            const regex = new RegExp(`{{\\s*${escapeRegExp(varName)}\\s*(?::[\\s\\S]*?)?\\s*}}`, 'g');
             finalContent = finalContent.replace(regex, value);
         });
 
-        // 检查目标站点
-        const targetUrl = document.getElementById('select-target-site').value;
-        if (targetUrl) {
-            // 在新标签页打开
-            chrome.runtime.sendMessage({
-                action: 'OPEN_AND_FILL',
-                url: targetUrl,
-                text: finalContent,
-                promptId: prompt.id
-            }, () => {
-                window.close(); // 确保消息发送成功后再关闭
-            });
-        } else {
-            // 在当前页面填入
-            sendToContent(finalContent, prompt.id);
-        }
+        // 执行回调
+        if (onConfirm) onConfirm(finalContent);
     });
 }
 
@@ -363,7 +409,7 @@ function closeVariableModal() {
 }
 
 function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\\]/g, '\\$&');
 }
 
 async function sendToContent(text, promptId) {
@@ -378,8 +424,14 @@ async function sendToContent(text, promptId) {
             if (chrome.runtime.lastError) {
                 alert('请刷新当前页面后再试 (PromptSnap 需要页面重新加载)');
             } else {
-                if (promptId) incrementUsage(promptId);
-                window.close();
+                if (promptId) {
+                    // 关键修复：等待 Storage 写入完成后再关闭窗口
+                    incrementUsage(promptId, () => {
+                        window.close();
+                    });
+                } else {
+                    window.close();
+                }
             }
         });
     } catch (err) {
@@ -387,14 +439,25 @@ async function sendToContent(text, promptId) {
     }
 }
 
-function incrementUsage(id) {
+function incrementUsage(id, callback) {
+    console.log('[Debug] incrementUsage started for id:', id);
     chrome.storage.local.get(['prompts'], (result) => {
         let prompts = result.prompts || [];
         const index = prompts.findIndex(p => p.id === id);
         if (index !== -1) {
+            const oldTime = prompts[index].lastUsedAt;
+            const newTime = Date.now();
             prompts[index].usageCount = (prompts[index].usageCount || 0) + 1;
-            prompts[index].lastUsedAt = Date.now();
-            chrome.storage.local.set({ prompts: prompts });
+            prompts[index].lastUsedAt = newTime;
+            
+            console.log(`[Debug] Updating prompt [${id}]: lastUsedAt ${oldTime} -> ${newTime}`);
+            
+            chrome.storage.local.set({ prompts: prompts }, () => {
+                console.log('[Debug] Storage updated.');
+                if (callback) callback();
+            });
+        } else {
+            console.warn('[Debug] Prompt not found in incrementUsage:', id);
         }
     });
 }
@@ -404,6 +467,7 @@ function incrementUsage(id) {
 // ========================================== 
 
 function loadPrompts() {
+    console.log('[Debug] loadPrompts called.');
     chrome.storage.local.get(['prompts'], (result) => {
         let prompts = result.prompts || [];
         
@@ -445,12 +509,26 @@ function renderTags(categories, allPrompts) {
 }
 
 function renderList(prompts) {
+    console.log('[Debug] renderList called with', prompts.length, 'prompts.');
+    
     prompts.sort((a, b) => {
-        const timeA = a.lastUsedAt || a.id || 0;
-        const timeB = b.lastUsedAt || b.id || 0;
-        return timeB - timeA;
+        // 统一计算“最后活跃时间”：取创建、更新、使用时间中的最大值
+        // id 充当 createdAt
+        const lastActiveA = Math.max(a.updatedAt || 0, a.lastUsedAt || 0, a.id || 0);
+        const lastActiveB = Math.max(b.updatedAt || 0, b.lastUsedAt || 0, b.id || 0);
+        
+        return lastActiveB - lastActiveA; // 绝对倒序，谁最近动过谁在上面
     });
     
+    // Log the top 3 items after sort
+    console.log('[Debug] Top 3 after sort:', prompts.slice(0, 3).map(p => ({
+        title: p.title, 
+        lastActive: Math.max(p.updatedAt || 0, p.lastUsedAt || 0, p.id || 0),
+        updatedAt: p.updatedAt,
+        lastUsedAt: p.lastUsedAt,
+        id: p.id
+    })));
+
     const listEl = document.getElementById('list');
     listEl.innerHTML = '';
 
@@ -463,22 +541,23 @@ function renderList(prompts) {
         const item = document.createElement('div');
         item.className = 'item';
         
+        // Use backticks for multi-line string
         item.innerHTML = `
-            <div class=\"item-title\" title=\"${escapeHtml(p.content)}\">
+            <div class="item-title" title="${escapeHtml(p.content)}">
                 ${escapeHtml(p.title)}
             </div>
-            <div class=\"item-actions\">
-                <button class=\"icon-btn icon-launch\" title=\"选择网站执行\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M13 2.03v2.02c4.39.54 7.5 4.53 6.96 8.92-.46 3.64-3.32 6.53-6.96 6.96v2c5.5-.55 9.5-5.43 8.95-10.93-.45-4.75-4.22-8.5-8.95-8.97zm-2 0c-4.75.47-8.5 4.22-8.95 8.97-.55 5.5 3.45 10.38 8.95 10.93v-2C7.32 19.48 4.46 16.59 4 12.95c-.54-4.39 2.57-8.38 6.96-8.92V2.03zM11 6v6h2V6h-2z\"></svg>
+            <div class="item-actions">
+                <button class="icon-btn icon-launch" title="选择网站执行">
+                    <svg viewBox="0 0 24 24"><path d="M13 2.03v2.02c4.39.54 7.5 4.53 6.96 8.92-.46 3.64-3.32 6.53-6.96 6.96v2c5.5-.55 9.5-5.43 8.95-10.93-.45-4.75-4.22-8.5-8.95-8.97zm-2 0c-4.75.47-8.5 4.22-8.95 8.97-.55 5.5 3.45 10.38 8.95 10.93v-2C7.32 19.48 4.46 16.59 4 12.95c-.54-4.39 2.57-8.38 6.96-8.92V2.03zM11 6v6h2V6h-2z"/></svg>
                 </button>
-                <button class=\"icon-btn icon-copy\" title=\"复制内容\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z\"></svg>
+                <button class="icon-btn icon-copy" title="复制内容">
+                    <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                 </button>
-                <button class=\"icon-btn icon-edit\" title=\"编辑\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z\"></svg>
+                <button class="icon-btn icon-edit" title="编辑">
+                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                 </button>
-                <button class=\"icon-btn icon-delete\" title=\"删除\">
-                    <svg viewBox=\"0 0 24 24\"><path d=\"M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z\"></svg>
+                <button class="icon-btn icon-delete" title="删除">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                 </button>
             </div>
         `;
@@ -498,15 +577,7 @@ function renderList(prompts) {
         item.querySelector('.icon-copy').addEventListener('click', (e) => {
             e.stopPropagation();
             const btn = e.currentTarget;
-            navigator.clipboard.writeText(p.content).then(() => {
-                showToast('已复制');
-                // 视觉反馈：图标变化
-                const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:#188038;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-                setTimeout(() => {
-                    btn.innerHTML = originalHtml;
-                }, 1000);
-            });
+            handleCopy(p, btn); // 调用新的复制逻辑
         });
 
         // 4. 编辑

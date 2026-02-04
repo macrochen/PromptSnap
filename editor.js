@@ -52,16 +52,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     prompts[index].title = title;
                     prompts[index].category = category;
                     prompts[index].content = content;
+                    prompts[index].updatedAt = Date.now(); // 更新编辑时间
                 }
             } else {
                 // 新增
+                const now = Date.now();
                 prompts.push({
-                    id: Date.now(),
+                    id: now,
                     title: title,
                     category: category,
                     content: content,
                     usageCount: 0,
-                    lastUsedAt: Date.now() // 新增：最后操作时间
+                    lastUsedAt: now, // 初始视为使用一次，或者至少有时间记录
+                    createdAt: now,
+                    updatedAt: now   // 初始编辑时间
                 });
             }
             
