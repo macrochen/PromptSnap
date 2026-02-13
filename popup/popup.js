@@ -250,13 +250,36 @@ async function handleCopy(prompt, btnElement) {
 
     if (matches.length > 0) {
         // 有变量：先显示输入框，确认后再复制
-        showVariableInput(prompt, matches, { showSiteSelector: false }, (finalContent) => {
-            copyToClipboard(finalContent, btnElement, prompt.id); // 复制处理后的文本
+        showVariableInput(prompt, matches, { showSiteSelector: false }, async (finalContent) => {
+            await copyToClipboard(finalContent, btnElement, prompt.id); // 复制处理后的文本
             closeVariableModal(); // 关闭弹窗返回列表
         });
     } else {
         // 无变量：直接复制原始文本
-        copyToClipboard(content, btnElement, prompt.id);
+        await copyToClipboard(content, btnElement, prompt.id);
+    }
+}
+
+async function copyToClipboard(text, btnElement, promptId) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('已复制到剪贴板');
+        
+        // 视觉反馈：更换图标为“勾选”状态
+        if (btnElement) {
+            const originalHtml = btnElement.innerHTML;
+            btnElement.innerHTML = `<svg viewBox="0 0 24 24" style="fill:#1e8e3e;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
+            setTimeout(() => {
+                btnElement.innerHTML = originalHtml;
+            }, 1000);
+        }
+
+        if (promptId) {
+            incrementUsage(promptId);
+        }
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        showToast('复制失败');
     }
 }
 
@@ -315,9 +338,10 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
         msg.style.marginBottom = '12px';
         inputsContainer.appendChild(msg);
     } else {
-        // 生成输入框
+        // 生成输入/选择控件
         uniqueVars.forEach((varName, index) => {
             const defaultVal = varsMap.get(varName);
+            const options = defaultVal.includes(';') ? defaultVal.split(';').map(s => s.trim()).filter(s => s) : [];
             
             const wrapper = document.createElement('div');
             wrapper.style.marginBottom = '12px';
@@ -329,28 +353,46 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
             label.style.marginBottom = '4px';
             label.style.color = '#5f6368';
             
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.dataset.varName = varName;
-            input.value = defaultVal; // 设置默认值
-            input.style.width = '100%';
-            input.style.padding = '8px';
-            input.style.border = '1px solid #dadce0';
-            input.style.borderRadius = '4px';
-            input.style.boxSizing = 'border-box';
+            let control;
+            if (options.length > 1) {
+                // 多选下拉框
+                control = document.createElement('select');
+                options.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = opt;
+                    control.appendChild(option);
+                });
+            } else {
+                // 普通输入框
+                control = document.createElement('input');
+                control.type = 'text';
+                control.value = defaultVal; // 设置默认值
+            }
+
+            control.dataset.varName = varName;
+            control.classList.add('var-input'); // 统一类名以便获取
+            control.style.width = '100%';
+            control.style.padding = '8px';
+            control.style.border = '1px solid #dadce0';
+            control.style.borderRadius = '4px';
+            control.style.boxSizing = 'border-box';
+            control.style.background = 'white';
             
-            // 聚焦时全选文本
-            input.addEventListener('focus', function() {
-                this.select();
-            });
+            // 聚焦时全选文本 (仅限 input)
+            if (control.tagName === 'INPUT') {
+                control.addEventListener('focus', function() {
+                    this.select();
+                });
+            }
             
             // 自动聚焦第一个
             if (index === 0) {
-                setTimeout(() => input.focus(), 10);
+                setTimeout(() => control.focus(), 10);
             }
 
             wrapper.appendChild(label);
-            wrapper.appendChild(input);
+            wrapper.appendChild(control);
             inputsContainer.appendChild(wrapper);
         });
     }
@@ -368,13 +410,13 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
     btnConfirm.parentNode.replaceChild(newBtnConfirm, btnConfirm);
 
     // 输入框回车导航
-    const allInputs = inputsContainer.querySelectorAll('input');
-    allInputs.forEach((input, index) => {
-        input.addEventListener('keydown', (e) => {
+    const allControls = inputsContainer.querySelectorAll('.var-input');
+    allControls.forEach((control, index) => {
+        control.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                if (index < allInputs.length - 1) {
-                    allInputs[index + 1].focus();
+                if (index < allControls.length - 1) {
+                    allControls[index + 1].focus();
                 } else {
                     newBtnConfirm.click();
                 }
@@ -384,12 +426,12 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
 
     newBtnConfirm.addEventListener('click', () => {
         let finalContent = prompt.content;
-        const inputs = inputsContainer.querySelectorAll('input');
+        const controls = inputsContainer.querySelectorAll('.var-input');
         
         // 替换逻辑升级：支持匹配带默认值的写法
-        inputs.forEach(input => {
-            const varName = input.dataset.varName;
-            const value = input.value;
+        controls.forEach(control => {
+            const varName = control.dataset.varName;
+            const value = control.value;
             // 匹配 {{ varName }} 或 {{ varName:default }}
             // 支持默认值中包含换行符
             const regex = new RegExp(`{{\\s*${escapeRegExp(varName)}\\s*(?::[\\s\\S]*?)?\\s*}}`, 'g');
