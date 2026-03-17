@@ -107,6 +107,23 @@
             </button>
             <input type="file" id="file-import" accept=".json" style="display: none;">
         </div>
+
+        <div style="margin-top: 24px; border-top: 1px solid #f1f3f4; padding-top: 20px;">
+            <div style="font-weight: 500; margin-bottom: 8px; font-size: 13px;">Google Drive 远程备份</div>
+            <div style="font-size: 12px; color: #5f6368; margin-bottom: 10px;">本地仍然是主存储，Google Drive 仅用于自动远程备份与恢复。</div>
+            <div id="drive-status" style="font-size: 12px; color: #5f6368; background: #f8f9fa; border-radius: 4px; padding: 8px; line-height: 1.5; margin-bottom: 10px;">未配置 Google Drive 备份</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button id="btn-drive-connect" style="padding: 8px; border: none; background: #1a73e8; color: white; border-radius: 4px; cursor: pointer; font-size: 12px;">连接 Drive</button>
+                <button id="btn-drive-backup" style="padding: 8px; border: 1px solid #dadce0; background: white; border-radius: 4px; cursor: pointer; font-size: 12px;">立即备份</button>
+                <button id="btn-drive-restore" style="padding: 8px; border: 1px solid #dadce0; background: white; border-radius: 4px; cursor: pointer; font-size: 12px;">从云端恢复</button>
+                <button id="btn-drive-view-json" style="padding: 8px; border: 1px solid #dadce0; background: white; border-radius: 4px; cursor: pointer; font-size: 12px;">查看云端 JSON</button>
+            </div>
+            <button id="btn-drive-disconnect" style="width: 100%; margin-top: 8px; padding: 8px; border: 1px solid #f6c7c4; background: #fce8e6; color: #d93025; border-radius: 4px; cursor: pointer; font-size: 12px;">断开 Google Drive</button>
+            <div id="drive-json-viewer" style="display: none; margin-top: 10px;">
+                <div style="font-size: 12px; color: #5f6368; margin-bottom: 6px;">当前云端备份内容</div>
+                <textarea id="drive-json-content" readonly style="width: 100%; min-height: 180px; padding: 8px; border: 1px solid #dadce0; border-radius: 4px; font-size: 11px; line-height: 1.5; box-sizing: border-box; font-family: 'SFMono-Regular', Consolas, monospace; resize: vertical; background: #fff;"></textarea>
+            </div>
+        </div>
     </div>
 
     <!-- 变量输入模态框 (默认隐藏) -->

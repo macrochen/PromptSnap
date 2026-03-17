@@ -4,8 +4,15 @@
   "version": "0.2.0",
   "description": "一键将预设 Prompt 填入 AI 输入框 (支持任意网站)",
   "permissions": [
-    "storage"
+    "storage",
+    "identity"
   ],
+  "oauth2": {
+    "client_id": "336433447993-kd5bnl8phvqq0ob4ohuv1idoe57hq0df.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata"
+    ]
+  },
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {

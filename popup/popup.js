@@ -4,6 +4,7 @@ let editingSiteId = null; // 当前正在编辑的站点 ID
 document.addEventListener('DOMContentLoaded', () => {
     loadPrompts();
     loadSites(); // 加载配置的站点
+    loadDriveStatus();
 
     document.getElementById('btn-add').addEventListener('click', () => {
         chrome.tabs.create({ url: 'editor.html' });
@@ -43,6 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-var-cancel').addEventListener('click', () => {
         closeVariableModal();
     });
+
+    document.getElementById('btn-drive-connect').addEventListener('click', connectDrive);
+    document.getElementById('btn-drive-backup').addEventListener('click', backupDriveNow);
+    document.getElementById('btn-drive-restore').addEventListener('click', restoreDriveBackup);
+    document.getElementById('btn-drive-view-json').addEventListener('click', viewDriveBackupJson);
+    document.getElementById('btn-drive-disconnect').addEventListener('click', disconnectDrive);
 });
 
 function toggleSettingsView(show) {
@@ -165,6 +172,7 @@ function saveSite() {
             nameInput.value = '';
             urlInput.value = '';
             loadSites();
+            notifyDriveDataChanged('site_saved');
         });
     });
 }
@@ -174,6 +182,7 @@ function deleteSite(id) {
         const sites = (result.aiSites || []).filter(s => s.id !== id);
         chrome.storage.local.set({ aiSites: sites }, () => {
             loadSites();
+            notifyDriveDataChanged('site_deleted');
         });
     });
 }
@@ -643,7 +652,10 @@ function renderList(prompts) {
 function deletePrompt(id) {
     chrome.storage.local.get(['prompts'], (result) => {
         const prompts = (result.prompts || []).filter(p => p.id !== id);
-        chrome.storage.local.set({ prompts: prompts }, () => loadPrompts());
+        chrome.storage.local.set({ prompts: prompts }, () => {
+            loadPrompts();
+            notifyDriveDataChanged('prompt_deleted');
+        });
     });
 }
 
@@ -724,6 +736,7 @@ function importPrompts(event) {
                     alert(`导入成功！\n新增: ${addedCount} 条\n更新: ${updatedCount} 条`);
                     document.getElementById('file-import').value = ''; 
                     loadPrompts(); // 重新加载列表
+                    notifyDriveDataChanged('prompt_imported');
                 });
             });
         } catch (err) {
@@ -732,4 +745,141 @@ function importPrompts(event) {
         }
     };
     reader.readAsText(file);
+}
+
+function sendRuntimeMessage(message) {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(message, (response) => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+            }
+
+            if (!response) {
+                reject(new Error('未收到扩展响应'));
+                return;
+            }
+
+            if (!response.ok) {
+                reject(new Error(response.error || '操作失败'));
+                return;
+            }
+
+            resolve(response);
+        });
+    });
+}
+
+async function loadDriveStatus() {
+    try {
+        const response = await sendRuntimeMessage({ action: 'DRIVE_GET_STATUS' });
+        renderDriveStatus(response.status);
+    } catch (err) {
+        console.error(err);
+        renderDriveStatus(null, err.message);
+    }
+}
+
+function renderDriveStatus(status, fallbackError = '') {
+    const statusEl = document.getElementById('drive-status');
+
+    if (!status) {
+        statusEl.textContent = fallbackError || '无法读取 Google Drive 状态';
+        statusEl.style.color = '#d93025';
+        return;
+    }
+
+    const lines = [];
+    lines.push(status.configured ? '已配置 manifest OAuth Client ID' : '未配置 manifest OAuth Client ID');
+    lines.push(status.connected ? 'Google Drive: 已连接' : 'Google Drive: 未连接');
+
+    if (status.lastBackupAt) {
+        lines.push(`最近备份: ${formatTime(status.lastBackupAt)}`);
+    }
+
+    if (status.lastRestoreAt) {
+        lines.push(`最近恢复: ${formatTime(status.lastRestoreAt)}`);
+    }
+
+    if (status.lastError) {
+        lines.push(`最近错误: ${status.lastError}`);
+    }
+
+    statusEl.innerHTML = lines.map(line => escapeHtml(line)).join('<br>');
+    statusEl.style.color = status.lastError ? '#d93025' : '#5f6368';
+}
+
+async function connectDrive() {
+    try {
+        const response = await sendRuntimeMessage({ action: 'DRIVE_CONNECT' });
+        renderDriveStatus(response.status);
+        showToast('Google Drive 已连接');
+    } catch (err) {
+        alert(err.message);
+        loadDriveStatus();
+    }
+}
+
+async function disconnectDrive() {
+    try {
+        const response = await sendRuntimeMessage({ action: 'DRIVE_DISCONNECT' });
+        renderDriveStatus(response.status);
+        showToast('已断开 Google Drive');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function backupDriveNow() {
+    try {
+        await sendRuntimeMessage({ action: 'DRIVE_BACKUP_NOW', reason: 'manual_backup' });
+        await loadDriveStatus();
+        showToast('已备份到 Google Drive');
+    } catch (err) {
+        alert(err.message);
+        loadDriveStatus();
+    }
+}
+
+async function restoreDriveBackup() {
+    if (!confirm('确定要用 Google Drive 备份覆盖本地数据吗？')) {
+        return;
+    }
+
+    try {
+        const response = await sendRuntimeMessage({ action: 'DRIVE_RESTORE' });
+        loadPrompts();
+        loadSites();
+        await loadDriveStatus();
+        showToast(`已恢复 ${response.restored.prompts} 条 Prompt`);
+    } catch (err) {
+        alert(err.message);
+        loadDriveStatus();
+    }
+}
+
+async function viewDriveBackupJson() {
+    try {
+        const response = await sendRuntimeMessage({ action: 'DRIVE_GET_BACKUP_JSON' });
+        const viewer = document.getElementById('drive-json-viewer');
+        const content = document.getElementById('drive-json-content');
+        content.value = JSON.stringify(response.backup, null, 2);
+        viewer.style.display = 'block';
+        showToast('已加载云端 JSON');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function notifyDriveDataChanged(reason) {
+    sendRuntimeMessage({
+        action: 'DRIVE_DATA_CHANGED',
+        reason: reason
+    }).catch((err) => {
+        console.warn('PromptSnap: Google Drive auto backup skipped.', err.message);
+    });
+}
+
+function formatTime(timestamp) {
+    return new Date(timestamp).toLocaleString();
 }

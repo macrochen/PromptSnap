@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             chrome.storage.local.set({ prompts: prompts }, () => {
+                notifyDriveDataChanged('prompt_saved');
                 window.close();
             });
         });
@@ -80,3 +81,14 @@ document.addEventListener('DOMContentLoaded', () => {
         window.close();
     });
 });
+
+function notifyDriveDataChanged(reason) {
+    chrome.runtime.sendMessage({
+        action: 'DRIVE_DATA_CHANGED',
+        reason: reason
+    }, () => {
+        if (chrome.runtime.lastError) {
+            console.warn('PromptSnap: Google Drive auto backup skipped.', chrome.runtime.lastError.message);
+        }
+    });
+}
