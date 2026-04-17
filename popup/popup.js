@@ -1,4 +1,6 @@
 let currentFilter = 'ALL'; // 当前选中的分类
+let currentSearchQuery = ''; // 当前搜索关键词
+let allPromptsCache = []; // 当前加载的 Prompt 缓存，用于搜索和分类叠加过滤
 let editingSiteId = null; // 当前正在编辑的站点 ID
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -8,6 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btn-add').addEventListener('click', () => {
         chrome.tabs.create({ url: 'editor.html' });
+    });
+
+    document.getElementById('search-input').addEventListener('input', (event) => {
+        currentSearchQuery = event.target.value;
+        renderList(filterPromptsForView(allPromptsCache, currentFilter, currentSearchQuery));
     });
 
     // --- 设置页面逻辑 ---
@@ -55,18 +62,21 @@ document.addEventListener('DOMContentLoaded', () => {
 function toggleSettingsView(show) {
     const settings = document.getElementById('view-settings');
     const header = document.querySelector('.header');
+    const search = document.getElementById('search-bar');
     const tags = document.getElementById('tags-bar');
     const list = document.getElementById('list');
 
     if (show) {
         settings.style.display = 'block';
         header.style.display = 'none';
+        search.style.display = 'none';
         tags.style.display = 'none';
         list.style.display = 'none';
         loadSites(); // 刷新列表
     } else {
         settings.style.display = 'none';
         header.style.display = 'flex';
+        search.style.display = 'block';
         tags.style.display = 'flex';
         list.style.display = 'block';
         loadPrompts(); // 刷新列表
@@ -295,6 +305,7 @@ async function copyToClipboard(text, btnElement, promptId) {
 function showVariableInput(prompt, matches, options = {}, onConfirm) {
     // 隐藏主列表，显示变量输入页
     document.querySelector('.header').style.display = 'none';
+    document.getElementById('search-bar').style.display = 'none';
     document.getElementById('tags-bar').style.display = 'none';
     document.getElementById('list').style.display = 'none';
     
@@ -454,6 +465,7 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
 
 function closeVariableModal() {
     document.querySelector('.header').style.display = 'flex';
+    document.getElementById('search-bar').style.display = 'block';
     document.getElementById('tags-bar').style.display = 'flex';
     document.getElementById('list').style.display = 'block';
     document.getElementById('variable-modal').style.display = 'none';
@@ -523,17 +535,33 @@ function loadPrompts() {
         let prompts = result.prompts || [];
         
         prompts.forEach(p => { if (!p.category) p.category = '未分类'; });
+        allPromptsCache = prompts;
 
         const categories = new Set(['ALL']);
         prompts.forEach(p => categories.add(p.category));
         
         renderTags(Array.from(categories), prompts);
 
-        const filtered = currentFilter === 'ALL' 
-            ? prompts 
-            : prompts.filter(p => p.category === currentFilter);
-            
-        renderList(filtered);
+        renderList(filterPromptsForView(prompts, currentFilter, currentSearchQuery));
+    });
+}
+
+function filterPromptsForView(prompts, category, query) {
+    const normalizedQuery = (query || '').trim().toLowerCase();
+
+    return prompts.filter(prompt => {
+        const matchesCategory = category === 'ALL' || prompt.category === category;
+        if (!matchesCategory) return false;
+
+        if (!normalizedQuery) return true;
+
+        const searchableText = [
+            prompt.title || '',
+            prompt.category || '',
+            prompt.content || ''
+        ].join('\n').toLowerCase();
+
+        return searchableText.includes(normalizedQuery);
     });
 }
 
@@ -551,8 +579,7 @@ function renderTags(categories, allPrompts) {
             document.querySelectorAll('.tag').forEach(t => t.classList.remove('active'));
             tag.classList.add('active');
             
-            const filtered = cat === 'ALL' ? allPrompts : allPrompts.filter(p => p.category === cat);
-            renderList(filtered);
+            renderList(filterPromptsForView(allPrompts, currentFilter, currentSearchQuery));
         });
         
         bar.appendChild(tag);
