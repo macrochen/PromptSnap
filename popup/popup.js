@@ -2,6 +2,7 @@ let currentFilter = 'ALL'; // 当前选中的分类
 let currentSearchQuery = ''; // 当前搜索关键词
 let allPromptsCache = []; // 当前加载的 Prompt 缓存，用于搜索和分类叠加过滤
 let editingSiteId = null; // 当前正在编辑的站点 ID
+const LAST_USED_TARGET_SITE_KEY = 'lastUsedTargetSiteUrl';
 
 document.addEventListener('DOMContentLoaded', () => {
     loadPrompts();
@@ -198,8 +199,9 @@ function deleteSite(id) {
 }
 
 function updateSiteSelect() {
-    chrome.storage.local.get(['aiSites'], (result) => {
+    chrome.storage.local.get(['aiSites', LAST_USED_TARGET_SITE_KEY], (result) => {
         const sites = result.aiSites || [];
+        const lastUsedTargetSiteUrl = result[LAST_USED_TARGET_SITE_KEY] || '';
         const select = document.getElementById('select-target-site');
         
         // 保留第一个 "当前页面"
@@ -211,6 +213,15 @@ function updateSiteSelect() {
             option.textContent = site.name;
             select.appendChild(option);
         });
+
+        const hasLastUsedSite = sites.some(site => site.url === lastUsedTargetSiteUrl);
+        select.value = hasLastUsedSite ? lastUsedTargetSiteUrl : '';
+    });
+}
+
+function saveLastUsedTargetSite(url, callback) {
+    chrome.storage.local.set({ [LAST_USED_TARGET_SITE_KEY]: url }, () => {
+        if (callback) callback();
     });
 }
 
@@ -238,14 +249,16 @@ async function handleFill(prompt, options = {}) {
             if (targetUrl) {
                 // Launch: 在新标签页打开
                 console.log('[Debug] Launching new tab:', targetUrl);
-                incrementUsage(prompt.id, () => {
-                    chrome.runtime.sendMessage({
-                        action: 'OPEN_AND_FILL',
-                        url: targetUrl,
-                        text: finalContent,
-                        promptId: prompt.id
-                    }, () => {
-                        window.close(); 
+                saveLastUsedTargetSite(targetUrl, () => {
+                    incrementUsage(prompt.id, () => {
+                        chrome.runtime.sendMessage({
+                            action: 'OPEN_AND_FILL',
+                            url: targetUrl,
+                            text: finalContent,
+                            promptId: prompt.id
+                        }, () => {
+                            window.close();
+                        });
                     });
                 });
             } else {
@@ -384,10 +397,12 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
                     control.appendChild(option);
                 });
             } else {
-                // 普通输入框
-                control = document.createElement('input');
-                control.type = 'text';
+                // 自由文本可能包含多行内容，使用 textarea 避免换行被单行 input 吞掉。
+                control = document.createElement('textarea');
                 control.value = defaultVal; // 设置默认值
+                control.rows = defaultVal.includes('\n') ? 4 : 2;
+                control.style.minHeight = '64px';
+                control.style.resize = 'vertical';
             }
 
             control.dataset.varName = varName;
@@ -433,6 +448,14 @@ function showVariableInput(prompt, matches, options = {}, onConfirm) {
     const allControls = inputsContainer.querySelectorAll('.var-input');
     allControls.forEach((control, index) => {
         control.addEventListener('keydown', (e) => {
+            if (control.tagName === 'TEXTAREA') {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    newBtnConfirm.click();
+                }
+                return;
+            }
+
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (index < allControls.length - 1) {
