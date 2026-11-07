@@ -237,6 +237,8 @@ async function restoreFromDrive() {
     await setLocal({
         prompts: backup.prompts,
         aiSites: backup.aiSites,
+        // 云端备份可能早于预置站点版本，重置 seed 标记让 popup 下次打开时补齐内置站点
+        builtinSitesSeededVersion: 0,
         [DRIVE_META_KEY]: {
             ...(current[DRIVE_META_KEY] || {}),
             connected: true,

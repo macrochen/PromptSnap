@@ -4,9 +4,17 @@ let allPromptsCache = []; // 当前加载的 Prompt 缓存，用于搜索和分�
 let editingSiteId = null; // 当前正在编辑的站点 ID
 const LAST_USED_TARGET_SITE_KEY = 'lastUsedTargetSiteUrl';
 
+// 内置预置站点：首次运行/升级时写入本地 aiSites，之后与普通站点一样可在设置页编辑、删除。
+// 修改版本号即可在后续版本中追加新的预置站点；seed 标记保证不会把用户删掉的站点加回来。
+const BUILTIN_SITES = [
+    { id: 'builtin-yuanbao', name: '元宝', url: 'https://yuanbao.tencent.com/chat/naQivTmsDa' }
+];
+const BUILTIN_SITES_VERSION_KEY = 'builtinSitesSeededVersion';
+const BUILTIN_SITES_VERSION = 1;
+
 document.addEventListener('DOMContentLoaded', () => {
     loadPrompts();
-    loadSites(); // 加载配置的站点
+    ensureBuiltinSites(loadSites); // 加载配置的站点（先补齐预置站点）
     loadDriveStatus();
 
     document.getElementById('btn-add').addEventListener('click', () => {
@@ -73,7 +81,7 @@ function toggleSettingsView(show) {
         search.style.display = 'none';
         tags.style.display = 'none';
         list.style.display = 'none';
-        loadSites(); // 刷新列表
+        ensureBuiltinSites(loadSites); // 刷新列表（含预置站点）
     } else {
         settings.style.display = 'none';
         header.style.display = 'flex';
@@ -87,6 +95,47 @@ function toggleSettingsView(show) {
 // ========================================== 
 // 站点管理逻辑
 // ========================================== 
+
+function normalizeSiteUrl(url) {
+    return (url || '').trim().replace(/\/+$/, '').toLowerCase();
+}
+
+/**
+ * 幂等地补齐内置预置站点。
+ * - 已 seed 过（或用户已手动添加同 URL 的站点）时不会重复写入；
+ * - 写入一次后由 seed 版本标记守住，用户在设置页删除后不会被重新加回。
+ */
+function ensureBuiltinSites(callback) {
+    chrome.storage.local.get(['aiSites', BUILTIN_SITES_VERSION_KEY], (result) => {
+        if ((result[BUILTIN_SITES_VERSION_KEY] || 0) >= BUILTIN_SITES_VERSION) {
+            if (callback) callback();
+            return;
+        }
+
+        const sites = Array.isArray(result.aiSites) ? result.aiSites.slice() : [];
+        let added = 0;
+
+        BUILTIN_SITES.forEach(builtin => {
+            const exists = sites.some(site =>
+                site.id === builtin.id || normalizeSiteUrl(site.url) === normalizeSiteUrl(builtin.url)
+            );
+            if (!exists) {
+                sites.push({ ...builtin });
+                added++;
+            }
+        });
+
+        chrome.storage.local.set({
+            aiSites: sites,
+            [BUILTIN_SITES_VERSION_KEY]: BUILTIN_SITES_VERSION
+        }, () => {
+            if (added > 0) {
+                notifyDriveDataChanged('builtin_sites_seeded');
+            }
+            if (callback) callback();
+        });
+    });
+}
 
 function loadSites() {
     chrome.storage.local.get(['aiSites'], (result) => {
@@ -199,23 +248,26 @@ function deleteSite(id) {
 }
 
 function updateSiteSelect() {
-    chrome.storage.local.get(['aiSites', LAST_USED_TARGET_SITE_KEY], (result) => {
-        const sites = result.aiSites || [];
-        const lastUsedTargetSiteUrl = result[LAST_USED_TARGET_SITE_KEY] || '';
-        const select = document.getElementById('select-target-site');
-        
-        // 保留第一个 "当前页面"
-        select.innerHTML = '<option value="">当前页面</option>';
-        
-        sites.forEach(site => {
-            const option = document.createElement('option');
-            option.value = site.url;
-            option.textContent = site.name;
-            select.appendChild(option);
-        });
+    // 先确保预置站点已落盘，再渲染下拉，避免首次打开执行配置时看不到元宝
+    ensureBuiltinSites(() => {
+        chrome.storage.local.get(['aiSites', LAST_USED_TARGET_SITE_KEY], (result) => {
+            const sites = result.aiSites || [];
+            const lastUsedTargetSiteUrl = result[LAST_USED_TARGET_SITE_KEY] || '';
+            const select = document.getElementById('select-target-site');
 
-        const hasLastUsedSite = sites.some(site => site.url === lastUsedTargetSiteUrl);
-        select.value = hasLastUsedSite ? lastUsedTargetSiteUrl : '';
+            // 保留第一个 "当前页面"
+            select.innerHTML = '<option value="">当前页面</option>';
+
+            sites.forEach(site => {
+                const option = document.createElement('option');
+                option.value = site.url;
+                option.textContent = site.name;
+                select.appendChild(option);
+            });
+
+            const hasLastUsedSite = sites.some(site => site.url === lastUsedTargetSiteUrl);
+            select.value = hasLastUsedSite ? lastUsedTargetSiteUrl : '';
+        });
     });
 }
 
